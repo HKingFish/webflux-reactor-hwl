@@ -9,6 +9,8 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
 import java.math.BigDecimal;
@@ -51,6 +53,7 @@ public class OrderService {
 
     @Resource
     private MemberService memberService;
+
 
     /**
      * 根据用户ID查询所有订单（基础方法，供其他方法调用）

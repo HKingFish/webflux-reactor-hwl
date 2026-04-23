@@ -6,10 +6,10 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @MapperScan("com.kingfish.webflux.infrastructure.mapper")
 @SpringBootApplication
-public class WebfluxApplication {
+public class TransactionWebfluxApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(WebfluxApplication.class, args);
+		SpringApplication.run(TransactionWebfluxApplication.class, args);
 	}
 
 }
