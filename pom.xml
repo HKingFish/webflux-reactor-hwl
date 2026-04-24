@@ -17,6 +17,7 @@
     <modules>
         <module>simple-webflux</module>
         <module>transactional-webflux</module>
+        <module>reactor-transactional-webflux</module>
     </modules>
     <properties>
         <java.version>17</java.version>
@@ -30,6 +31,13 @@
 <!--    </dependencies>-->
     <dependencyManagement>
         <dependencies>
+
+            <!-- MySQL 的 R2DBC 驱动实现（Spring Boot 3.0+ 需使用 1.4.0 版本） -->
+            <dependency>
+                <groupId>io.asyncer</groupId>
+                <artifactId>r2dbc-mysql</artifactId>
+                <version>1.4.0</version>
+            </dependency>
 
             <!-- 以下第三方依赖需要显式指定版本 -->
             <dependency>
@@ -59,7 +67,7 @@
             </dependency>
             <dependency>
                 <groupId>mysql</groupId>
-                <artifactId>mysql-connector-java</artifactId>
+                <artifactId>mysql-connector-j</artifactId>
                 <version>8.0.33</version>
             </dependency>
             <dependency>
