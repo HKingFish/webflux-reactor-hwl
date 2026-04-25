@@ -44,9 +44,6 @@ public interface ProductRepository extends R2dbcRepository<ProductDO, Long> {
     @Query("UPDATE product SET stock = stock - :quantity WHERE product_id = :productId AND stock >= :quantity")
     Mono<Long> deductStock(Long productId, Integer quantity);
 
-
-    @Autowired
-    DatabaseClient databaseClient;
     /**
      * 查询有效商品（状态为上架且库存充足）
      * <p>

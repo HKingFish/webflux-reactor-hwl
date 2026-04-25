@@ -92,6 +92,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-data-r2dbc</artifactId>
         </dependency>
+
+
+<!--        &lt;!&ndash; spring-boot-starter-jooq 支持 jOOQ 数据库操作 &ndash;&gt;-->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jooq</artifactId>
+        </dependency>
+
         <!-- jOOQ 核心包（不引入 starter-jooq，避免 JDBC 自动配置与 R2DBC 冲突） -->
         <dependency>
             <groupId>org.jooq</groupId>
@@ -102,7 +110,49 @@
             <groupId>io.asyncer</groupId>
             <artifactId>r2dbc-mysql</artifactId>
         </dependency>
-
-
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.jooq</groupId>
+                <artifactId>jooq-codegen-maven</artifactId>
+                <version>3.19.12</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- 数据库连接（用 JDBC 生成，不影响 R2DBC 运行） -->
+                    <jdbc>
+                        <driver>com.mysql.cj.jdbc.Driver</driver>
+                        <url>jdbc:mysql://localhost:3306/reactor_demo</url>
+                        <user>root</user>
+                        <password>root</password>
+                    </jdbc>
+                    <generator>
+                        <database>
+                            <name>org.jooq.meta.mysql.MySQLDatabase</name>
+                            <inputSchema>reactor_demo</inputSchema>
+                            <excludes>sys|mysql</excludes>
+                        </database>
+                        <generate>
+                            <!--  生成 POJO  -->
+                            <pojos>true</pojos>
+                            <!-- 生成 Record -->
+                            <records>true</records>
+                            <daos>false</daos>
+                        </generate>
+                        <target>
+                            <packageName>com.your.app.jooq</packageName>
+                            <directory>src/main/java</directory>
+                        </target>
+                    </generator>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 </project>

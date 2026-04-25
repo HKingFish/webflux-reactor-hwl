@@ -11,9 +11,13 @@ import org.jooq.Field;
 import org.jooq.Table;
 import org.jooq.impl.DSL;
 import org.jooq.impl.SQLDataType;
+import org.springframework.data.r2dbc.core.R2dbcEntityTemplate;
+import org.springframework.data.relational.core.query.Criteria;
+import org.springframework.data.relational.core.query.Query;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -21,6 +25,9 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static org.springframework.data.relational.core.query.Criteria.where;
+import static org.springframework.data.relational.core.query.Query.query;
 
 /**
  * 事务验证服务（R2DBC 响应式事务版本）
@@ -55,10 +62,10 @@ public class TransactionService {
     private ProductRepository productRepository;
 
     @Resource
-    private DSLContext dslContext;
+    private DatabaseClient databaseClient;
 
     @Resource
-    private DatabaseClient databaseClient;
+    private TransactionalOperator transactionalOperator;
 
     /**
      * 创建订单并扣减库存（R2DBC 响应式事务）
@@ -98,111 +105,10 @@ public class TransactionService {
                         order.getOrderNo(), productId, quantity))
                 .doOnError(e -> log.error("下单失败，商品ID：{}，数量：{}，原因：{}",
                         productId, quantity, e.getMessage()));
+//                // 编程式事务包裹
+//                .as(transactionalOperator::transactional);
     }
 
-    /**
-     * 使用 jOOQ DSL 创建订单并扣减库存（演示 jOOQ + R2DBC 配合使用）
-     * <p>
-     * jOOQ 在此场景中仅作为类型安全的 SQL 构造器，生成 SQL 字符串后，
-     * 通过 Spring 的 {@link DatabaseClient} 执行，底层走 R2DBC 非阻塞通道。
-     * <p>
-     * 与 {@link #createOrder} 的区别：前者使用 Spring Data R2DBC Repository，
-     * 本方法使用 jOOQ DSL 手动构建 SQL，适合复杂查询场景。
-     *
-     * @param productId 商品ID
-     * @param quantity  购买数量
-     * @return 创建成功的订单信息
-     */
-    @Transactional(rollbackFor = Exception.class)
-    public Mono<OrderDO> createOrderWithJooq(Long productId, Integer quantity) {
-        // jOOQ 表和字段定义（生产环境建议通过 jOOQ 代码生成器自动生成）
-        Table<?> productTable = DSL.table("product");
-        Field<Long> productIdField = DSL.field("product_id", SQLDataType.BIGINT);
-        Field<BigDecimal> priceField = DSL.field("price", SQLDataType.DECIMAL(10, 2));
-        Field<Integer> stockField = DSL.field("stock", SQLDataType.INTEGER);
-
-        Table<?> orderTable = DSL.table("`order`");
-        Field<Long> orderIdField = DSL.field("order_id", SQLDataType.BIGINT);
-        Field<Long> userIdField = DSL.field("user_id", SQLDataType.BIGINT);
-        Field<Long> orderProductIdField = DSL.field("product_id", SQLDataType.BIGINT);
-        Field<Integer> quantityField = DSL.field("quantity", SQLDataType.INTEGER);
-        Field<String> orderNoField = DSL.field("order_no", SQLDataType.VARCHAR(64));
-        Field<BigDecimal> totalAmountField = DSL.field("total_amount", SQLDataType.DECIMAL(10, 2));
-        Field<Integer> payStatusField = DSL.field("pay_status", SQLDataType.INTEGER);
-        Field<Integer> orderStatusField = DSL.field("order_status", SQLDataType.INTEGER);
-
-        // 1. 使用 jOOQ 构建查询商品的 SQL
-        String selectSql = dslContext.select(priceField, stockField)
-                .from(productTable)
-                .where(productIdField.eq(productId))
-                .getSQL();
-
-        return databaseClient.sql(selectSql)
-                .bind(0, productId)
-                .map(row -> {
-                    ProductDO product = new ProductDO();
-                    product.setPrice(row.get("price", BigDecimal.class));
-                    product.setStock(row.get("stock", Integer.class));
-                    return product;
-                })
-                .one()
-                .switchIfEmpty(Mono.error(
-                        new IllegalArgumentException("商品不存在，商品ID：" + productId)))
-                // 2. 使用 jOOQ 构建插入订单的 SQL
-                .flatMap(product -> {
-                    OrderDO order = buildOrder(productId, quantity, product.getPrice());
-
-                    String insertSql = dslContext.insertInto(orderTable)
-                            .columns(orderIdField, userIdField, orderProductIdField,
-                                    quantityField, orderNoField, totalAmountField,
-                                    payStatusField, orderStatusField)
-                            .values(DSL.param(orderIdField), DSL.param(userIdField),
-                                    DSL.param(orderProductIdField), DSL.param(quantityField),
-                                    DSL.param(orderNoField), DSL.param(totalAmountField),
-                                    DSL.param(payStatusField), DSL.param(orderStatusField))
-                            .getSQL();
-
-                    return databaseClient.sql(insertSql)
-                            .bind(0, order.getOrderId())
-                            .bind(1, order.getUserId())
-                            .bind(2, order.getProductId())
-                            .bind(3, order.getQuantity())
-                            .bind(4, order.getOrderNo())
-                            .bind(5, order.getTotalAmount())
-                            .bind(6, order.getPayStatus())
-                            .bind(7, order.getOrderStatus())
-                            .fetch()
-                            .rowsUpdated()
-                            .doOnNext(rows -> log.info("jOOQ 订单插入成功，订单号：{}", order.getOrderNo()))
-                            .thenReturn(order);
-                })
-                // 3. 使用 jOOQ 构建扣减库存的 SQL
-                .flatMap(order -> {
-                    String updateSql = dslContext.update(productTable)
-                            .set(stockField, stockField.minus(quantity))
-                            .where(productIdField.eq(productId)
-                                    .and(stockField.greaterOrEqual(quantity)))
-                            .getSQL();
-
-                    return databaseClient.sql(updateSql)
-                            .bind(0, quantity)
-                            .bind(1, productId)
-                            .bind(2, quantity)
-                            .fetch()
-                            .rowsUpdated()
-                            .flatMap(updatedRows -> {
-                                if (updatedRows == DEDUCT_STOCK_FAIL_ROWS) {
-                                    return Mono.error(new IllegalStateException(
-                                            "扣减库存失败，可能存在并发竞争，商品ID：" + productId));
-                                }
-                                return Mono.just(order);
-                            });
-                })
-                .doOnSuccess(order -> log.info("jOOQ 下单成功，订单号：{}，商品ID：{}，数量：{}",
-                        order.getOrderNo(), productId, quantity))
-                .doOnError(e -> log.error("jOOQ 下单失败，商品ID：{}，数量：{}，原因：{}",
-                        productId, quantity, e.getMessage()));
-    }
 
     /**
      * 构建订单对象
