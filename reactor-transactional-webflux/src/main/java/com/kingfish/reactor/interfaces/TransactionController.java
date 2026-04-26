@@ -1,5 +1,6 @@
 package com.kingfish.reactor.interfaces;
 
+import com.kingfish.reactor.application.JooqService;
 import com.kingfish.reactor.application.TransactionService;
 import com.kingfish.reactor.domain.model.entity.OrderDO;
 import com.kingfish.reactor.domain.model.vo.Result;
@@ -20,8 +21,11 @@ public class TransactionController {
     @Resource
     private TransactionService transactionService;
 
+    @Resource
+    private JooqService jooqService;
+
     /**
-     * 创建订单接口（用于验证 Reactor 场景下的事务行为）
+     * 创建订单接口（Spring Data R2DBC Repository 版本）
      *
      * @param productId 商品ID
      * @param quantity  购买数量
@@ -36,16 +40,16 @@ public class TransactionController {
     }
 
     /**
-     * 创建订单接口（jOOQ 版本，演示 jOOQ DSL + R2DBC 配合使用）
+     * 创建订单接口（jOOQ 基类版本，演示 ReactiveBaseDao + jOOQ DSL）
      *
      * @param productId 商品ID
      * @param quantity  购买数量
      * @return 统一响应结果
      */
-    @PostMapping("/createOrderWithJooq")
-    public Mono<Result<OrderDO>> createOrderWithJooq(@RequestParam Long productId,
-                                                     @RequestParam Integer quantity) {
-        return transactionService.createOrderWithJooq(productId, quantity)
+    @PostMapping("/createOrderByJooq")
+    public Mono<Result<OrderDO>> createOrderByJooq(@RequestParam Long productId,
+                                                   @RequestParam Integer quantity) {
+        return jooqService.createOrder(productId, quantity)
                 .map(Result::success)
                 .onErrorResume(e -> Mono.just(Result.fail(e.getMessage())));
     }

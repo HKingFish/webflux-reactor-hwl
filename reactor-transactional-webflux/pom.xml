@@ -118,6 +118,17 @@
                 <groupId>org.jooq</groupId>
                 <artifactId>jooq-codegen-maven</artifactId>
                 <version>3.19.12</version>
+
+                <!-- 在这里给插件单独加 JDBC 驱动，项目主代码不会用到, 防止根 R2DBC 驱动冲突 -->
+                <dependencies>
+                    <dependency>
+                        <groupId>com.mysql</groupId>
+                        <artifactId>mysql-connector-j</artifactId>
+                        <version>8.0.33</version>
+                    </dependency>
+                </dependencies>
+
+                <!-- Maven 在 编译项目时,自动运行 jOOQ 代码生成！如果不加，则需要自己手动执行 mvn jooq-codegen:generate 来执行 -->
                 <executions>
                     <execution>
                         <goals>
@@ -125,6 +136,7 @@
                         </goals>
                     </execution>
                 </executions>
+
                 <configuration>
                     <!-- 数据库连接（用 JDBC 生成，不影响 R2DBC 运行） -->
                     <jdbc>
@@ -137,17 +149,38 @@
                         <database>
                             <name>org.jooq.meta.mysql.MySQLDatabase</name>
                             <inputSchema>reactor_demo</inputSchema>
+                            <!-- 排除哪些表 / 库不生成 -->
                             <excludes>sys|mysql</excludes>
                         </database>
+
+                        <!-- 生成的类名策略, 添加 DO 后缀 -->
+                        <strategy>
+                            <matchers>
+                                <tables>
+                                    <table>
+                                        <pojoClass>
+                                            <!-- 拼接策略 ： 表名 + DO，使用 _ 是为了让 DO 保持大写，否则会拼接成小写的 do -->
+                                            <expression>$0_d_o</expression>
+                                            <!-- 指定 AS_IS 策略 ： 原样保留，不做任何大小写转换-->
+                                            <transform>PASCAL</transform>
+                                        </pojoClass>
+                                    </table>
+                                </tables>
+                            </matchers>
+                        </strategy>
+
                         <generate>
                             <!--  生成 POJO  -->
                             <pojos>true</pojos>
-                            <!-- 生成 Record -->
+                            <!-- 生成 jOOQ 专用的 Record（可直接插入更新） -->
                             <records>true</records>
+                            <!-- 生成简单的 CRUD DAO 一般关闭，自己写 Service 更灵活。-->
                             <daos>false</daos>
                         </generate>
+
+                        <!-- 生成的目录 -->
                         <target>
-                            <packageName>com.your.app.jooq</packageName>
+                            <packageName>com.kingfish.reactor.domain.model.jooq</packageName>
                             <directory>src/main/java</directory>
                         </target>
                     </generator>
